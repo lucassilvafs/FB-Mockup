@@ -5,8 +5,10 @@ import {
   PackageSearch, 
   ChevronDown, 
   Palette, 
-  Upload 
+  Upload,
+  Download 
 } from 'lucide-react';
+
 import icone from './assets/icone.png';
 import caneca from './assets/caneca.png';
 import camisapreta from './assets/camisa.jpg';
@@ -29,8 +31,8 @@ const MockupGenerator = () => {
 
   const [uploadedImage, setUploadedImage] = useState(null);
   const fileInputRef = useRef(null);
+  const mockupRef = useRef(null); 
 
-  // ESTADOS DE POSIÇÃO E ESCALA
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -53,20 +55,70 @@ const MockupGenerator = () => {
     }
   }, [id]);
 
+  // MÉTODO DE ALTA QUALIDADE (CANVAS NATIVO)
+  const downloadMockup = () => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const baseImg = new Image();
+    const artImg = new Image();
+
+    baseImg.crossOrigin = "anonymous";
+    artImg.crossOrigin = "anonymous";
+
+    baseImg.src = selectedColor;
+    baseImg.onload = () => {
+      // Define o tamanho do canvas pela resolução real da imagem original
+      canvas.width = baseImg.width;
+      canvas.height = baseImg.height;
+
+      // Fundo
+      ctx.fillStyle = "#043659";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Desenha o Produto
+      ctx.drawImage(baseImg, 0, 0);
+
+      if (uploadedImage) {
+        artImg.src = uploadedImage;
+        artImg.onload = () => {
+          const visualWidth = mockupRef.current.offsetWidth;
+          const scaleFactor = canvas.width / visualWidth;
+
+          // Tamanho base da arte (w-44 = 176px na tela) convertido para a escala real
+          const baseArtSize = 176; 
+          const finalArtSize = baseArtSize * artScale * scaleFactor;
+
+          // Cálculo de centralização + movimento do usuário
+          const centerX = (canvas.width / 2) + (position.x * scaleFactor) - (finalArtSize / 2);
+          const centerY = (canvas.height / 2) + (position.y * scaleFactor) - (finalArtSize / 2);
+
+          // Efeito de mesclagem para realismo
+          ctx.globalCompositeOperation = 'multiply';
+          ctx.drawImage(artImg, centerX, centerY, finalArtSize, finalArtSize);
+
+          saveCanvas(canvas);
+        };
+      } else {
+        saveCanvas(canvas);
+      }
+    };
+  };
+
+  const saveCanvas = (canvas) => {
+    const link = document.createElement('a');
+    link.download = `mockup-${selectedProduct.name}.png`;
+    link.href = canvas.toDataURL('image/png', 1.0);
+    link.click();
+  };
+
   const handleMouseDown = (e) => {
     setIsDragging(true);
-    setOffset({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    });
+    setOffset({ x: e.clientX - position.x, y: e.clientY - position.y });
   };
 
   const handleMouseMove = (e) => {
     if (!isDragging) return;
-    setPosition({
-      x: e.clientX - offset.x,
-      y: e.clientY - offset.y
-    });
+    setPosition({ x: e.clientX - offset.x, y: e.clientY - offset.y });
   };
 
   const handleMouseUp = () => setIsDragging(false);
@@ -86,6 +138,12 @@ const MockupGenerator = () => {
     }
   };
 
+  const getBackgroundSize = () => {
+    const min = 0.2;
+    const max = 2.0;
+    return ((artScale - min) * 100) / (max - min);
+  };
+
   return (
     <div className="min-h-screen w-full bg-gray-50 font-sans text-slate-800 select-none">
       <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -98,16 +156,20 @@ const MockupGenerator = () => {
       </header>
 
       <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 p-8">
-        <section 
+        <section
           className="lg:col-span-8 bg-white border border-gray-200 rounded-2xl p-6 md:p-12 flex items-center justify-center min-h-[550px] shadow-sm relative overflow-hidden"
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         >
-          <div className="w-full h-full bg-[#043659] rounded-xl flex items-center justify-center relative overflow-hidden transition-all duration-500 ease-in-out">
-            
+          <div 
+            ref={mockupRef}
+            style={{ backgroundColor: '#043659' }}
+            className="w-full h-full rounded-xl flex items-center justify-center relative overflow-hidden"
+          >
             <img 
               src={selectedColor}
+              crossOrigin="anonymous"
               alt="Base do Produto" 
               className="absolute inset-0 w-full h-full object-contain p-1 z-0 pointer-events-none" 
             />
@@ -123,7 +185,7 @@ const MockupGenerator = () => {
                     transform: `translate(${position.x}px, ${position.y}px) scale(${artScale})`,
                     cursor: isDragging ? 'grabbing' : 'grab'
                   }}
-                  className="w-44 h-44 object-contain opacity-90 mix-blend-multiply transition-transform duration-75 ease-out"
+                  className="w-44 h-44 object-contain opacity-100 mix-blend-multiply transition-transform duration-75 ease-out"
                   alt="Sua Arte" 
                 />
               ) : (
@@ -144,6 +206,7 @@ const MockupGenerator = () => {
             </div>
             {isProductOpen && (
               <div className="p-4 border-t border-gray-100">
+                {/* O SelectCustom agora recebe os ícones de imagem configurados no array products */}
                 <SelectCustom selected={selectedProduct} setSelected={handleProductChange} products={products} />
               </div>
             )}
@@ -170,28 +233,39 @@ const MockupGenerator = () => {
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 space-y-4">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-700 text-sm">Tamanho da Arte</span>
-              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+              {/* <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
                 {Math.round(artScale * 100)}%
-              </span>
+              </span> */}
             </div>
             
             <div className="relative pt-2">
               <input
-                type="range" min="0.5" max="1.5" step="0.1"
+                
+                type="range" 
+                min="0.2" 
+                max="2.0" 
+                step="any"
                 value={artScale}
                 onChange={(e) => setArtScale(parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-[#043659] relative z-10"
+                style={{
+                  background: `linear-gradient(to right, #043659 ${getBackgroundSize()}%, #e5e7eb ${getBackgroundSize()}%)`,
+                  appearance: 'none',
+                  height: '6px',
+                  borderRadius: '999px',
+                  width: '100%'
+                }}
+                className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-[#043659]"
               />
-              <div className="flex justify-between w-full px-1 mt-2">
-                {[0.5, 0.7, 0.9, 1.0, 1.1, 1.3, 1.5].map((val) => (
-                  <div key={val} className="flex flex-col items-center gap-1">
-                    <div className={`w-0.5 transition-all ${artScale === val ? 'h-3 bg-blue-500' : 'h-1.5 bg-gray-300'}`} />
-                    {val === 1.0 && <span className="text-[8px] text-gray-400 font-bold">100%</span>}
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
+
+          <button
+            onClick={downloadMockup}
+            className="w-full py-4 bg-[#043659] hover:bg-slate-800 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+          >
+            <Download size={20} />
+            Baixar Mockup
+          </button>
         </aside>
       </main>
     </div>
