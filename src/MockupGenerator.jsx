@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 import icone from './assets/icone.png';
-import caneca from './assets/caneca.png';
+import caneca from './assets/caneca.jpg';
 import camisapreta from './assets/camisa.jpg';
 import camisaazul from './assets/camisaazul.jpg';
 import canecaazul from './assets/caneca-termica-azul.jpg';
